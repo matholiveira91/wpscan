@@ -39,7 +39,7 @@ module WPScan
 
         @vulnerabilities = []
 
-        [*db_data['vulnerabilities']].each do |json_vuln|
+        Array(db_data['vulnerabilities']).each do |json_vuln|
           vulnerability = Vulnerability.load_from_json(json_vuln)
           @vulnerabilities << vulnerability if vulnerable_to?(vulnerability)
         end
@@ -53,7 +53,9 @@ module WPScan
       #
       # @return [ Boolean ]
       def vulnerable_to?(vuln)
-        return true unless version && vuln && vuln.fixed_in && !vuln.fixed_in.empty?
+        return false if version && vuln&.introduced_in && version < vuln.introduced_in
+
+        return true unless version && vuln&.fixed_in && !vuln.fixed_in.empty?
 
         version < vuln.fixed_in
       end
@@ -160,7 +162,7 @@ module WPScan
       #
       # @return [ Typhoeus::Response ]
       def head_and_get(path, codes = [200], params = {})
-        final_path = +@path_from_blog
+        final_path = @path_from_blog.dup # @path_from_blog is set in the plugin/theme
         final_path << path unless path.nil?
 
         blog.head_and_get(final_path, codes, params)

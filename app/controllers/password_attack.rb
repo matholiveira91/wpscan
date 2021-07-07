@@ -19,31 +19,37 @@ module WPScan
           OptChoice.new(['--password-attack ATTACK',
                          'Force the supplied attack to be used rather than automatically determining one.'],
                         choices: %w[wp-login xmlrpc xmlrpc-multicall],
-                        normalize: %i[downcase underscore to_sym])
+                        normalize: %i[downcase underscore to_sym]),
+          OptString.new(['--login-uri URI', 'The URI of the login page if different from /wp-login.php'])
         ]
+      end
+
+      def attack_opts
+        @attack_opts ||= {
+          show_progression: user_interaction?,
+          multicall_max_passwords: ParsedCli.multicall_max_passwords
+        }
       end
 
       def run
         return unless ParsedCli.passwords
 
-        if user_interaction?
-          output('@info',
-                 msg: "Performing password attack on #{attacker.titleize} against #{users.size} user/s")
-        end
-
-        attack_opts = {
-          show_progression: user_interaction?,
-          multicall_max_passwords: ParsedCli.multicall_max_passwords
-        }
-
         begin
           found = []
 
-          attacker.attack(users, passwords(ParsedCli.passwords), attack_opts) do |user|
+          if user_interaction?
+            output('@info',
+                   msg: "Performing password attack on #{attacker.titleize} against #{users.size} user/s")
+          end
+
+          attacker.attack(users, ParsedCli.passwords, attack_opts) do |user|
             found << user
 
             attacker.progress_bar.log("[SUCCESS] - #{user.username} / #{user.password}")
           end
+        rescue Error::NoLoginInterfaceDetected => e
+          # TODO: Maybe output that in JSON as well.
+          output('@notice', msg: e.to_s) if user_interaction?
         ensure
           output('users', users: found)
         end
@@ -65,6 +71,8 @@ module WPScan
 
         case ParsedCli.password_attack
         when :wp_login
+          raise Error::NoLoginInterfaceDetected unless target.login_url
+
           Finders::Passwords::WpLogin.new(target)
         when :xmlrpc
           raise Error::XMLRPCNotDetected unless xmlrpc
@@ -81,8 +89,8 @@ module WPScan
       def xmlrpc_get_users_blogs_enabled?
         if xmlrpc&.enabled? &&
            xmlrpc.available_methods.include?('wp.getUsersBlogs') &&
-           xmlrpc.method_call('wp.getUsersBlogs', [SecureRandom.hex[0, 6], SecureRandom.hex[0, 4]])
-                 .run.body !~ /XML\-RPC services are disabled/
+           !xmlrpc.method_call('wp.getUsersBlogs', [SecureRandom.hex[0, 6], SecureRandom.hex[0, 4]])
+                  .run.body.match?(/>\s*405\s*</)
 
           true
         else
@@ -100,8 +108,10 @@ module WPScan
           else
             Finders::Passwords::XMLRPC.new(xmlrpc)
           end
-        else
+        elsif target.login_url
           Finders::Passwords::WpLogin.new(target)
+        else
+          raise Error::NoLoginInterfaceDetected
         end
       end
 
@@ -111,15 +121,6 @@ module WPScan
 
         ParsedCli.usernames.reduce([]) do |acc, elem|
           acc << Model::User.new(elem.chomp)
-        end
-      end
-
-      # @param [ String ] wordlist_path
-      #
-      # @return [ Array<String> ]
-      def passwords(wordlist_path)
-        @passwords ||= File.open(wordlist_path).reduce([]) do |acc, elem|
-          acc << elem.chomp
         end
       end
     end

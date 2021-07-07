@@ -79,14 +79,14 @@ WPScan::DB::DynamicFinders::Theme.versions_finders_configs.each do |slug, config
                 end
 
                 it 'returns the expected version/s' do
-                  found = [*finder.passive]
+                  found = Array(finder.passive)
 
                   expect(found).to_not be_empty
 
                   found.each_with_index do |version, index|
                     expected_version = expected.at(index)
                     expected_ie = expected_version['interesting_entries'].map do |ie|
-                      ie.gsub(target.url + ',', ie_url + ',')
+                      ie.gsub("#{target.url},", "#{ie_url},")
                     end
 
                     expect(version).to be_a WPScan::Model::Version
@@ -109,14 +109,14 @@ WPScan::DB::DynamicFinders::Theme.versions_finders_configs.each do |slug, config
                 end
 
                 it 'returns the expected version/s' do
-                  found = [*finder.passive]
+                  found = Array(finder.passive)
 
                   expect(found).to_not be_empty
 
                   found.each_with_index do |version, index|
                     expected_version = expected.at(index)
                     expected_ie = expected_version['interesting_entries'].map do |ie|
-                      ie.gsub(target.url + ',', ie_url + ',')
+                      ie.gsub("#{target.url},", "#{ie_url},")
                     end
 
                     expect(version).to be_a WPScan::Model::Version
@@ -154,7 +154,7 @@ WPScan::DB::DynamicFinders::Theme.versions_finders_configs.each do |slug, config
             end
 
             it 'returns the expected version' do
-              found = [*finder.aggressive]
+              found = Array(finder.aggressive)
 
               expect(found).to_not be_empty
 

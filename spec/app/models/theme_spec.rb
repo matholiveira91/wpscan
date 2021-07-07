@@ -41,6 +41,12 @@ describe WPScan::Model::Theme do
       its(:style_uri)   { should eql 'http://www.elegantthemes.com/gallery/divi/' }
       its(:license_uri) { should eql 'http://www.gnu.org/licenses/gpl-2.0.html' }
     end
+
+    context 'when no tags' do
+      let(:fixture) { fixtures.join('no_tags.css') }
+
+      its(:author) { should eql nil }
+    end
   end
 
   describe '#version' do
@@ -194,7 +200,7 @@ describe WPScan::Model::Theme do
 
     after do
       expect(theme.vulnerabilities).to eq @expected
-      expect(theme.vulnerable?).to eql @expected.empty? ? false : true
+      expect(theme.vulnerable?).to eql !@expected.empty?
     end
 
     context 'when theme not in the DB' do

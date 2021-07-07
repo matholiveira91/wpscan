@@ -27,7 +27,7 @@ module WPScan
     end
 
     def wpvulndb_url(id)
-      "https://wpvulndb.com/vulnerabilities/#{id}"
+      "https://wpscan.com/vulnerability/#{id}"
     end
   end
 end

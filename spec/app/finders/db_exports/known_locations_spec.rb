@@ -12,7 +12,7 @@ describe WPScan::Finders::DbExports::KnownLocations do
       allow(target).to receive(:sub_dir).and_return(false)
     end
 
-    it 'replace {domain_name} by its value' do
+    it 'replaces {domain_name} by its values' do
       expect(finder.potential_urls(opts).keys).to eql %w[
         http://ex.lo/aa/ex.sql
         http://ex.lo/aa/wordpress.sql
@@ -27,8 +27,8 @@ describe WPScan::Finders::DbExports::KnownLocations do
       context "when #{sub_domain} sub-domain" do
         let(:url) { "https://#{sub_domain}.domain.tld" }
 
-        it 'replace {domain_name} by its correct value' do
-          expect(finder.potential_urls(opts).keys).to include "#{url}/domain.sql"
+        it 'replaces {domain_name} by its correct values' do
+          expect(finder.potential_urls(opts).keys).to include "#{url}/domain.sql", "#{url}/#{sub_domain}.domain.sql"
         end
       end
     end
@@ -36,7 +36,7 @@ describe WPScan::Finders::DbExports::KnownLocations do
     context 'when multi-level tlds' do
       let(:url) { 'https://something.com.tr' }
 
-      it 'replace {domain_name} by its correct value' do
+      it 'replaces {domain_name} by its correct value' do
         expect(finder.potential_urls(opts).keys).to include 'https://something.com.tr/something.sql'
       end
     end
@@ -44,16 +44,38 @@ describe WPScan::Finders::DbExports::KnownLocations do
     context 'when multi-level tlds and sub-domain' do
       let(:url) { 'https://dev.something.com.tr' }
 
-      it 'replace {domain_name} by its correct value' do
-        expect(finder.potential_urls(opts).keys).to include 'https://dev.something.com.tr/something.sql'
+      it 'replaces {domain_name} by its correct values' do
+        expect(finder.potential_urls(opts).keys).to include(
+          'https://dev.something.com.tr/something.sql',
+          'https://dev.something.com.tr/dev.something.sql'
+        )
       end
     end
 
     context 'when some weird stuff' do
       let(:url) { 'https://098f6bcd4621d373cade4e832627b4f6.aa-bb-ccc-dd.domain-test.com' }
 
-      it 'replace {domain_name} by its correct value' do
-        expect(finder.potential_urls(opts).keys).to include "#{url}/domain-test.sql"
+      it 'replaces {domain_name} by its correct values' do
+        expect(finder.potential_urls(opts).keys).to include(
+          "#{url}/domain-test.sql",
+          "#{url}/098f6bcd4621d373cade4e832627b4f6.aa-bb-ccc-dd.domain-test.sql"
+        )
+      end
+    end
+
+    context 'when a non standard URL' do
+      let(:url) { 'http://dc-2' }
+
+      it 'replaces {domain_name} by its correct value' do
+        expect(finder.potential_urls(opts).keys).to include "#{url}/dc-2.sql"
+      end
+    end
+
+    context 'when an IP address' do
+      let(:url) { 'http://192.168.1.12' }
+
+      it 'replaces {domain_name} by the IP address' do
+        expect(finder.potential_urls(opts).keys).to include "#{url}/192.168.1.12.sql"
       end
     end
   end
@@ -94,19 +116,29 @@ describe WPScan::Finders::DbExports::KnownLocations do
         expect(target).to receive(:homepage_or_404?).twice.and_return(false)
       end
 
-      it 'returns the expected Array<DbExport>' do
-        expected = []
+      context 'when matching the pattern' do
+        it 'returns the expected Array<DbExport>' do
+          expected = []
 
-        found_files.each do |file|
-          url = "#{target.url}#{file}"
-          expected << WPScan::Model::DbExport.new(
-            url,
-            confidence: 100,
-            found_by: described_class::DIRECT_ACCESS
-          )
+          found_files.each do |file|
+            url = "#{target.url}#{file}"
+            expected << WPScan::Model::DbExport.new(
+              url,
+              confidence: 100,
+              found_by: described_class::DIRECT_ACCESS
+            )
+          end
+
+          expect(finder.aggressive(opts)).to eql expected
         end
+      end
 
-        expect(finder.aggressive(opts)).to eql expected
+      context 'when not matching the pattern' do
+        let(:db_export) { '' }
+
+        it 'returns an empty array' do
+          expect(finder.aggressive(opts)).to eql []
+        end
       end
     end
   end

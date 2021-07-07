@@ -22,8 +22,30 @@ module WPScan
           target.multi_call(methods, cache_ttl: 0).run
         end
 
+        # @param [ IO ] file
+        # @param [ Integer ] passwords_size
+        # @return [ Array<String> ] The passwords from the last checked position in the file until there are
+        #                           passwords_size passwords retrieved
+        def passwords_from_wordlist(file, passwords_size)
+          pwds       = []
+          added_pwds = 0
+
+          return pwds if passwords_size.zero?
+
+          # Make sure that the main code does not call #sysseek or #count etc
+          # otherwise the file descriptor will be set to somwehere else
+          file.each_line(chomp: true) do |line|
+            pwds << line
+            added_pwds += 1
+
+            break if added_pwds == passwords_size
+          end
+
+          pwds
+        end
+
         # @param [ Array<Model::User> ] users
-        # @param [ Array<String> ] passwords
+        # @param [ String ] wordlist_path
         # @param [ Hash ] opts
         # @option opts [ Boolean ] :show_progression
         # @option opts [ Integer ] :multicall_max_passwords
@@ -33,18 +55,22 @@ module WPScan
         # TODO: Make rubocop happy about metrics etc
         #
         # rubocop:disable all
-        def attack(users, passwords, opts = {})
-          wordlist_index         = 0
+        def attack(users, wordlist_path, opts = {})
+          checked_passwords      = 0
+          wordlist               = File.open(wordlist_path)
+          wordlist_size          = wordlist.count
           max_passwords          = opts[:multicall_max_passwords]
           current_passwords_size = passwords_size(max_passwords, users.size)
 
-          create_progress_bar(total: (passwords.size / current_passwords_size.round(1)).ceil,
+          create_progress_bar(total: (wordlist_size / current_passwords_size.round(1)).ceil,
                               show_progression: opts[:show_progression])
 
+          wordlist.sysseek(0) # reset the descriptor to the beginning of the file as it changed with #count
+
           loop do
-            current_users     = users.select { |user| user.password.nil? }
-            current_passwords = passwords[wordlist_index, current_passwords_size]
-            wordlist_index   += current_passwords_size
+            current_users      = users.select { |user| user.password.nil? }
+            current_passwords  = passwords_from_wordlist(wordlist, current_passwords_size)
+            checked_passwords += current_passwords_size
 
             break if current_users.empty? || current_passwords.nil? || current_passwords.empty?
 
@@ -75,9 +101,9 @@ module WPScan
                 progress_bar.stop
                 break
               end
-              
+
               begin
-                progress_bar.total = progress_bar.progress + ((passwords.size - wordlist_index) / current_passwords_size.round(1)).ceil
+                progress_bar.total = progress_bar.progress + ((wordlist_size - checked_passwords) / current_passwords_size.round(1)).ceil
               rescue ProgressBar::InvalidProgressError
               end
             end
